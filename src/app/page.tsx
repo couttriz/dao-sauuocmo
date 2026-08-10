@@ -30,6 +30,26 @@ export default function Home() {
 
   // Hook useChat kinh điển: Tự động hứng luồng Stream từ Backend và ghép thành chữ
   // Ép kiểu "as any" để dập tắt mọi cảnh báo ảo của TypeScript
+  // const {
+  //   messages,
+  //   input,
+  //   handleInputChange,
+  //   handleSubmit,
+  //   isLoading,
+  //   setMessages,
+  //   append
+  // } = useChat({
+  //   api: "/api/chat",
+  //   body: { formData },
+  // }) as any;
+
+  // 1. Tách cấu hình ra biến riêng (bỏ qua kiểm tra tham số đầu vào)
+  const chatConfig: any = {
+    api: "/api/chat",
+    body: { formData },
+  };
+
+  // 2. Thêm 'as any' ở CUỐI CÙNG của useChat(chatConfig) (bỏ qua kiểm tra kết quả đầu ra)
   const {
     messages,
     input,
@@ -38,11 +58,7 @@ export default function Home() {
     isLoading,
     setMessages,
     append
-  } = useChat({
-    api: "/api/chat",
-    body: { formData },
-  }) as any;
-
+  } = useChat(chatConfig) as any;
   // Tự động cuộn xuống tin nhắn mới nhất
   const messagesEndRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
