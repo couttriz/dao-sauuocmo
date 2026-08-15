@@ -1,34 +1,106 @@
 "use client";
 
 import {
-  useState,
-  useRef,
   useEffect,
+  useRef,
+  useState,
   type FormEvent,
+  type KeyboardEvent,
 } from "react";
-
 import { useChat } from "@ai-sdk/react";
-
+import ReactMarkdown from "react-markdown";
 import {
-  Compass,
-  HelpCircle,
-  Newspaper,
-  ArrowRight,
-  CheckCircle2,
-  Send,
-  User,
-  Bot,
-  Loader2,
-  RotateCcw,
   AlertTriangle,
+  ArrowRight,
+  Bot,
+  CheckCircle2,
+  ChevronRight,
+  CircleHelp,
+  Compass,
   ExternalLink,
+  GraduationCap,
+  Loader2,
+  Newspaper,
+  RotateCcw,
+  Search,
+  Send,
+  ShieldCheck,
+  Square,
+  Sparkles,
+  Target,
+  User,
 } from "lucide-react";
 
-export default function Home() {
-  const [activeTab, setActiveTab] = useState<
-    "survey" | "chat" | "info"
-  >("survey");
+type ActiveTab = "survey" | "chat" | "info";
 
+const motivationOptions = [
+  "Đam mê cá nhân",
+  "Thu nhập hấp dẫn",
+  "Danh tiếng & Địa vị",
+  "Xu hướng xã hội (Hot trend)",
+  "Áp lực từ gia đình",
+  "Hình mẫu thành công (Idol/KOL)",
+  "Chưa có định hướng rõ ràng",
+];
+
+const tabItems: {
+  id: ActiveTab;
+  label: string;
+  shortLabel: string;
+  icon: typeof CircleHelp;
+  step: string;
+}[] = [
+  {
+    id: "survey",
+    label: "Hỏi đáp & Khảo sát",
+    shortLabel: "Khảo sát",
+    icon: CircleHelp,
+    step: "01",
+  },
+  {
+    id: "chat",
+    label: "AI Định hướng",
+    shortLabel: "AI tư vấn",
+    icon: Sparkles,
+    step: "02",
+  },
+  {
+    id: "info",
+    label: "Thông tin thực tế",
+    shortLabel: "Kiểm chứng",
+    icon: Newspaper,
+    step: "03",
+  },
+];
+
+const MAX_MESSAGE_CHARS = 3000;
+
+function getFriendlyChatError(error: Error) {
+  const message = error.message?.trim() || "";
+
+  if (/quá nhanh|too many requests|429|rate limit/i.test(message)) {
+    return message.includes("quá nhanh")
+      ? message
+      : "Bạn đang gửi tin nhắn quá nhanh. Chờ một chút rồi thử lại nhé.";
+  }
+
+  if (/failed to fetch|network|fetch failed/i.test(message)) {
+    return "Mất kết nối tới máy chủ. Kiểm tra mạng rồi bấm Thử lại.";
+  }
+
+  if (/ai_service_error|an error occurred/i.test(message)) {
+    return "AI tạm thời không tạo được câu trả lời. Bạn có thể thử lại ngay.";
+  }
+
+  if (message && message.length <= 240) {
+    return message;
+  }
+
+  return "Có lỗi xảy ra khi kết nối AI. Vui lòng thử lại.";
+}
+
+export default function Home() {
+  const [activeTab, setActiveTab] = useState<ActiveTab>("survey");
   const [formData, setFormData] = useState({
     targetJob: "",
     source: "Mạng xã hội",
@@ -36,15 +108,7 @@ export default function Home() {
     confidence: 5,
     motivations: [] as string[],
   });
-
-  const [isFormSubmitted, setIsFormSubmitted] =
-    useState(false);
-
-  // =========================================================
-  // AI CHAT
-  // AI SDK 7 / @ai-sdk/react 4
-  // =========================================================
-
+  const [isFormSubmitted, setIsFormSubmitted] = useState(false);
   const [input, setInput] = useState("");
 
   const {
@@ -52,36 +116,26 @@ export default function Home() {
     sendMessage,
     status,
     setMessages,
+    error,
+    regenerate,
+    stop,
   } = useChat();
 
-  const isLoading =
-    status === "submitted" || status === "streaming";
-
-  // =========================================================
-  // AUTO SCROLL
-  // =========================================================
+  const isLoading = status === "submitted" || status === "streaming";
+  const friendlyError = error ? getFriendlyChatError(error) : null;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({
-      behavior: "smooth",
-    });
-  }, [messages]);
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, status]);
 
-  // =========================================================
-  // FORM
-  // =========================================================
-
-  const motivationOptions = [
-    "Đam mê cá nhân",
-    "Thu nhập hấp dẫn",
-    "Danh tiếng & Địa vị",
-    "Xu hướng xã hội (Hot trend)",
-    "Áp lực từ gia đình",
-    "Hình mẫu thành công (Idol/KOL)",
-    "Chưa có định hướng rõ ràng",
-  ];
+  useEffect(() => {
+    if (activeTab === "chat" && isFormSubmitted) {
+      window.setTimeout(() => chatInputRef.current?.focus(), 180);
+    }
+  }, [activeTab, isFormSubmitted]);
 
   const handleMotivationToggle = (option: string) => {
     setFormData((prev) => {
@@ -90,31 +144,27 @@ export default function Home() {
       return {
         ...prev,
         motivations: exists
-          ? prev.motivations.filter((m) => m !== option)
+          ? prev.motivations.filter((motivation) => motivation !== option)
           : [...prev.motivations, option],
       };
     });
   };
 
-  const handleSubmitForm = (
-    e: FormEvent<HTMLFormElement>
-  ) => {
-    e.preventDefault();
+  const handleSubmitForm = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
 
     if (!formData.targetJob.trim()) {
-      alert(
-        "Vui lòng nhập ngành nghề bạn muốn tìm hiểu!"
-      );
+      alert("Vui lòng nhập ngành nghề bạn muốn tìm hiểu!");
       return;
     }
 
+    setFormData((prev) => ({
+      ...prev,
+      targetJob: prev.targetJob.trim(),
+    }));
     setIsFormSubmitted(true);
     setActiveTab("chat");
   };
-
-  // =========================================================
-  // RESET
-  // =========================================================
 
   const handleReset = () => {
     const confirmed = confirm(
@@ -129,36 +179,44 @@ export default function Home() {
     setActiveTab("survey");
   };
 
-  // =========================================================
-  // SEND NORMAL CHAT MESSAGE
-  // =========================================================
-
-  const handleSubmit = (
-    e: FormEvent<HTMLFormElement>
-  ) => {
-    e.preventDefault();
-
+  const sendCurrentMessage = () => {
     const text = input.trim();
 
     if (!text || isLoading) return;
 
+    if (text.length > MAX_MESSAGE_CHARS) {
+      return;
+    }
+
     void sendMessage(
+      { text },
       {
-        text,
-      },
-      {
-        body: {
-          formData,
-        },
+        body: { formData },
       }
     );
 
     setInput("");
   };
 
-  // =========================================================
-  // FIRST ANALYSIS MESSAGE
-  // =========================================================
+  const handleRetry = () => {
+    if (isLoading) return;
+
+    void regenerate({
+      body: { formData },
+    });
+  };
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    sendCurrentMessage();
+  };
+
+  const handleChatKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      sendCurrentMessage();
+    }
+  };
 
   const handleStartAnalysis = () => {
     if (isLoading) return;
@@ -168,666 +226,668 @@ export default function Home() {
         text: `Chào AI, tôi muốn tìm hiểu về nghề ${formData.targetJob}. Hãy phân tích góc khuất và thực tế ngành này cho tôi.`,
       },
       {
-        body: {
-          formData,
-        },
+        body: { formData },
       }
     );
   };
 
-  // =========================================================
-  // UI
-  // =========================================================
+  const goToTab = (tab: ActiveTab) => {
+    setActiveTab(tab);
+  };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans">
-      {/* HEADER */}
+    <div className="app-shell min-h-screen text-slate-100">
+      <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden="true">
+        <div className="ambient-orb ambient-orb-one" />
+        <div className="ambient-orb ambient-orb-two" />
+        <div className="soft-grid absolute inset-0 opacity-40" />
+      </div>
 
-      <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-indigo-600 rounded-lg text-white">
-              <Compass className="w-6 h-6 animate-pulse" />
+      <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#060a17]/85 backdrop-blur-xl">
+        <div className="mx-auto flex min-h-[72px] max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+          <button
+            type="button"
+            onClick={() => setActiveTab("survey")}
+            className="group flex min-w-0 items-center gap-3 text-left"
+          >
+            <div className="brand-mark">
+              <Compass className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
 
-            <div>
-              <h1 className="font-bold text-lg text-slate-100 tracking-wide">
-                ĐÀO SÂU ƯỚC MƠ
-              </h1>
-
-              <p className="text-xs text-slate-400">
-                Thấu hiểu ngành nghề • Phá tan Thiên lệch
-                sống sót
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h1 className="truncate text-[15px] font-extrabold tracking-[0.08em] text-white sm:text-lg">
+                  ĐÀO SÂU ƯỚC MƠ
+                </h1>
+                <span className="hidden rounded-full border border-indigo-400/20 bg-indigo-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-indigo-300 sm:inline">
+                  AI Career Lab
+                </span>
+              </div>
+              <p className="mt-0.5 hidden text-xs text-slate-400 sm:block">
+                Hiểu nghề sâu hơn trước khi chọn đường dài hơn.
               </p>
             </div>
-          </div>
+          </button>
 
-          {formData.targetJob &&
-            isFormSubmitted && (
-              <div className="flex items-center gap-2 bg-indigo-950/50 border border-indigo-800/50 px-3 py-1.5 rounded-full text-xs text-indigo-300">
-                <span>Đang phân tích:</span>
-
-                <span className="font-semibold text-white">
+          {isFormSubmitted && formData.targetJob && (
+            <div className="flex max-w-[46%] items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-2 sm:max-w-sm sm:px-3">
+              <Target className="h-4 w-4 shrink-0 text-indigo-300" />
+              <div className="min-w-0 text-xs">
+                <span className="hidden text-slate-500 sm:inline">Đang phân tích · </span>
+                <span className="block truncate font-semibold text-slate-100 sm:inline">
                   {formData.targetJob}
                 </span>
-
-                <button
-                  onClick={handleReset}
-                  className="ml-2 text-indigo-400 hover:text-rose-400 flex items-center gap-1 transition"
-                  title="Đổi ngành nghề"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>Đổi</span>
-                </button>
               </div>
-            )}
+              <button
+                type="button"
+                onClick={handleReset}
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-slate-400 transition hover:bg-rose-400/10 hover:text-rose-300"
+                aria-label="Đổi ngành nghề"
+                title="Đổi ngành nghề"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
-      {/* TABS */}
+      <div className="relative z-30 hidden border-b border-white/[0.06] bg-[#070c1a]/75 backdrop-blur-lg md:block">
+        <nav className="mx-auto flex max-w-6xl items-center gap-2 px-6 py-2.5" aria-label="Quy trình định hướng">
+          {tabItems.map((tab) => {
+            const Icon = tab.icon;
+            const active = activeTab === tab.id;
+            const completed =
+              (tab.id === "survey" && isFormSubmitted) ||
+              (tab.id === "chat" && messages.length > 0);
 
-      <div className="bg-slate-950 border-b border-slate-800">
-        <div className="max-w-6xl mx-auto px-4 flex justify-center md:justify-start gap-2">
-          <button
-            onClick={() => setActiveTab("survey")}
-            className={`flex items-center gap-2 px-5 py-3 border-b-2 font-medium text-sm transition-colors ${
-              activeTab === "survey"
-                ? "border-indigo-500 text-indigo-400 bg-slate-900/50"
-                : "border-transparent text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            <HelpCircle className="w-4 h-4" />
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => goToTab(tab.id)}
+                className={`group flex min-w-0 flex-1 items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all duration-200 ${
+                  active
+                    ? "border-indigo-400/25 bg-indigo-500/10 shadow-[0_10px_35px_rgba(79,70,229,0.08)]"
+                    : "border-transparent hover:border-white/[0.06] hover:bg-white/[0.03]"
+                }`}
+                aria-current={active ? "step" : undefined}
+              >
+                <div
+                  className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg text-xs font-bold transition ${
+                    active
+                      ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/20"
+                      : completed
+                        ? "bg-emerald-400/10 text-emerald-300"
+                        : "bg-white/[0.04] text-slate-500"
+                  }`}
+                >
+                  {completed && !active ? <CheckCircle2 className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+                </div>
 
-            <span>1. Hỏi đáp & Khảo sát</span>
-          </button>
+                <div className="min-w-0">
+                  <p className={`text-[10px] font-bold uppercase tracking-[0.18em] ${active ? "text-indigo-300" : "text-slate-600"}`}>
+                    Bước {tab.step}
+                  </p>
+                  <p className={`truncate text-sm font-semibold ${active ? "text-white" : "text-slate-400 group-hover:text-slate-200"}`}>
+                    {tab.label}
+                  </p>
+                </div>
 
-          <button
-            onClick={() => setActiveTab("chat")}
-            className={`flex items-center gap-2 px-5 py-3 border-b-2 font-medium text-sm transition-colors ${
-              activeTab === "chat"
-                ? "border-indigo-500 text-indigo-400 bg-slate-900/50"
-                : "border-transparent text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            <Compass className="w-4 h-4" />
-
-            <span>2. AI Định hướng</span>
-
-            {isFormSubmitted && (
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab("info")}
-            className={`flex items-center gap-2 px-5 py-3 border-b-2 font-medium text-sm transition-colors ${
-              activeTab === "info"
-                ? "border-indigo-500 text-indigo-400 bg-slate-900/50"
-                : "border-transparent text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            <Newspaper className="w-4 h-4" />
-
-            <span>3. Thông tin thực tế</span>
-          </button>
-        </div>
+                {active && <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-indigo-300" />}
+              </button>
+            );
+          })}
+        </nav>
       </div>
 
-      {/* MAIN */}
-
-      <main className="flex-1 max-w-4xl w-full mx-auto p-4 md:p-6 flex flex-col">
-        {/* =====================================================
-            TAB 1 - SURVEY
-        ===================================================== */}
-
+      <main className="relative z-10 mx-auto w-full max-w-5xl px-4 pb-28 pt-5 sm:px-6 sm:pt-7 md:pb-10 lg:pt-9">
         {activeTab === "survey" && (
-          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-xl">
-            <div className="mb-6">
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                <HelpCircle className="text-indigo-400" />
+          <section className="glass-panel overflow-hidden rounded-[28px]">
+            <div className="border-b border-white/[0.06] px-5 py-5 sm:px-7 sm:py-6 lg:px-8">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="max-w-2xl">
+                  <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-indigo-400/15 bg-indigo-400/[0.08] px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-indigo-300">
+                    <GraduationCap className="h-3.5 w-3.5" />
+                    Khảo sát đầu vào
+                  </div>
+                  <h2 className="text-balance text-2xl font-bold tracking-tight text-white sm:text-[28px]">
+                    Trước khi hỏi AI, hãy cho nó hiểu bạn trước.
+                  </h2>
+                  <p className="mt-2 max-w-xl text-sm leading-6 text-slate-400 sm:text-[15px]">
+                    5 câu hỏi ngắn giúp AI phân tích đúng bối cảnh, động cơ và mức độ chắc chắn của bạn — thay vì đưa ra lời khuyên chung chung.
+                  </p>
+                </div>
 
-                Thu thập thông tin ban đầu (Giai đoạn 1 &
-                2)
-              </h2>
-
-              <p className="text-slate-400 text-sm mt-1">
-                Giúp AI hiểu rõ động cơ và mức độ sẵn sàng
-                của bạn trước khi đi sâu phản biện.
-              </p>
+                <div className="flex shrink-0 items-center gap-2 self-start rounded-2xl border border-white/[0.06] bg-white/[0.025] px-3 py-2.5 text-xs text-slate-400">
+                  <ShieldCheck className="h-4 w-4 text-emerald-300" />
+                  <span>Khoảng 2 phút</span>
+                </div>
+              </div>
             </div>
 
-            <form
-              onSubmit={handleSubmitForm}
-              className="space-y-6"
-            >
-              {/* JOB */}
-
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  1. Ngành nghề bạn đang quan tâm hoặc muốn
-                  theo đuổi là gì? *
+            <form onSubmit={handleSubmitForm} className="space-y-7 px-5 py-6 sm:px-7 sm:py-7 lg:px-8 lg:py-8">
+              <fieldset className="space-y-3">
+                <label htmlFor="target-job" className="field-label">
+                  <span className="field-number">1</span>
+                  Ngành nghề bạn đang quan tâm hoặc muốn theo đuổi là gì?
+                  <span className="text-rose-300">*</span>
                 </label>
-
                 <input
+                  id="target-job"
                   type="text"
                   required
+                  autoComplete="off"
                   placeholder="Ví dụ: Lập trình viên AI, Digital Marketing, Bác sĩ..."
                   value={formData.targetJob}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      targetJob: e.target.value,
-                    })
+                  onChange={(event) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      targetJob: event.target.value,
+                    }))
                   }
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition"
+                  className="form-control"
                 />
+              </fieldset>
+
+              <div className="grid gap-7 lg:grid-cols-2 lg:gap-5">
+                <fieldset className="space-y-3">
+                  <label htmlFor="source" className="field-label">
+                    <span className="field-number">2</span>
+                    Bạn biết đến ngành này chủ yếu từ đâu?
+                  </label>
+                  <div className="select-wrap">
+                    <select
+                      id="source"
+                      value={formData.source}
+                      onChange={(event) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          source: event.target.value,
+                        }))
+                      }
+                      className="form-control appearance-none pr-11"
+                    >
+                      <option value="Mạng xã hội">Mạng xã hội (TikTok, Facebook, YouTube...)</option>
+                      <option value="Gia đình / Người thân">Gia đình / Người thân tư vấn</option>
+                      <option value="Bạn bè / Đồng nghiệp">Bạn bè / Đồng nghiệp</option>
+                      <option value="Thần tượng / KOL">Thần tượng / KOLs / Người nổi tiếng</option>
+                      <option value="Thầy cô / Trường học">Thầy cô / Định hướng trường học</option>
+                      <option value="Tự tìm hiểu báo chí">Tự tìm hiểu qua bài báo / Nghiên cứu</option>
+                    </select>
+                  </div>
+                </fieldset>
+
+                <fieldset className="space-y-3">
+                  <label htmlFor="search-time" className="field-label">
+                    <span className="field-number">3</span>
+                    Bạn đã tìm hiểu ngành này trong bao lâu?
+                  </label>
+                  <div className="select-wrap">
+                    <select
+                      id="search-time"
+                      value={formData.searchTime}
+                      onChange={(event) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          searchTime: event.target.value,
+                        }))
+                      }
+                      className="form-control appearance-none pr-11"
+                    >
+                      <option value="Mới nghe nói tới">Mới nghe nói tới gần đây</option>
+                      <option value="Dưới 1 tháng">Dưới 1 tháng</option>
+                      <option value="Từ 1 - 6 tháng">Từ 1 đến 6 tháng</option>
+                      <option value="Trên 6 tháng">Trên 6 tháng</option>
+                      <option value="Đang học / Đang làm">Đang trực tiếp học/làm việc trong ngành</option>
+                    </select>
+                  </div>
+                </fieldset>
               </div>
 
-              {/* SOURCE */}
+              <fieldset className="space-y-3">
+                <div className="flex flex-wrap items-end justify-between gap-2">
+                  <legend className="field-label">
+                    <span className="field-number">4</span>
+                    Động cơ chính khiến bạn chọn ngành này?
+                  </legend>
+                  <span className="text-xs text-slate-500">Có thể chọn nhiều</span>
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  2. Bạn biết đến ngành này chủ yếu thông
-                  qua đâu?
-                </label>
-
-                <select
-                  value={formData.source}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      source: e.target.value,
-                    })
-                  }
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-slate-100 focus:outline-none focus:border-indigo-500 transition"
-                >
-                  <option value="Mạng xã hội">
-                    Mạng xã hội (TikTok, Facebook,
-                    Youtube...)
-                  </option>
-
-                  <option value="Gia đình / Người thân">
-                    Gia đình / Người thân tư vấn
-                  </option>
-
-                  <option value="Bạn bè / Đồng nghiệp">
-                    Bạn bè / Đồng nghiệp
-                  </option>
-
-                  <option value="Thần tượng / KOL">
-                    Thần tượng / KOLs / Người nổi tiếng
-                  </option>
-
-                  <option value="Thầy cô / Trường học">
-                    Thầy cô / Định hướng trường học
-                  </option>
-
-                  <option value="Tự tìm hiểu báo chí">
-                    Tự tìm hiểu qua bài báo / Nghiên cứu
-                  </option>
-                </select>
-              </div>
-
-              {/* SEARCH TIME */}
-
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  3. Bạn đã dành bao nhiêu thời gian để tìm
-                  hiểu về ngành này?
-                </label>
-
-                <select
-                  value={formData.searchTime}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      searchTime: e.target.value,
-                    })
-                  }
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-slate-100 focus:outline-none focus:border-indigo-500 transition"
-                >
-                  <option value="Mới nghe nói tới">
-                    Mới nghe nói tới gần đây
-                  </option>
-
-                  <option value="Dưới 1 tháng">
-                    Dưới 1 tháng
-                  </option>
-
-                  <option value="Từ 1 - 6 tháng">
-                    Từ 1 đến 6 tháng
-                  </option>
-
-                  <option value="Trên 6 tháng">
-                    Trên 6 tháng
-                  </option>
-
-                  <option value="Đang học / Đang làm">
-                    Đang trực tiếp học/làm việc trong ngành
-                  </option>
-                </select>
-              </div>
-
-              {/* MOTIVATIONS */}
-
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  4. Động cơ chính khiến bạn chọn ngành này?
-                  (Có thể chọn nhiều)
-                </label>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                <div className="grid gap-2.5 sm:grid-cols-2">
                   {motivationOptions.map((option) => {
-                    const selected =
-                      formData.motivations.includes(option);
+                    const selected = formData.motivations.includes(option);
 
                     return (
                       <button
                         type="button"
                         key={option}
-                        onClick={() =>
-                          handleMotivationToggle(option)
-                        }
-                        className={`p-3 rounded-xl border text-left text-sm flex items-center justify-between transition ${
-                          selected
-                            ? "bg-indigo-950/60 border-indigo-500 text-indigo-200"
-                            : "bg-slate-900/50 border-slate-800 text-slate-400 hover:border-slate-700"
-                        }`}
+                        onClick={() => handleMotivationToggle(option)}
+                        className={`motivation-card ${selected ? "motivation-card-active" : ""}`}
+                        aria-pressed={selected}
                       >
-                        <span>{option}</span>
-
-                        {selected && (
-                          <CheckCircle2 className="w-4 h-4 text-indigo-400" />
-                        )}
+                        <span className="pr-3">{option}</span>
+                        <span
+                          className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border transition ${
+                            selected
+                              ? "border-indigo-400 bg-indigo-500 text-white"
+                              : "border-slate-700 text-transparent"
+                          }`}
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        </span>
                       </button>
                     );
                   })}
                 </div>
-              </div>
+              </fieldset>
 
-              {/* CONFIDENCE */}
+              <fieldset className="rounded-2xl border border-white/[0.06] bg-white/[0.025] p-4 sm:p-5">
+                <div className="mb-5 flex items-start justify-between gap-4">
+                  <div>
+                    <legend className="field-label">
+                      <span className="field-number">5</span>
+                      Bạn tự tin tới đâu về lựa chọn này?
+                    </legend>
+                    <p className="mt-1.5 pl-9 text-xs leading-5 text-slate-500">
+                      Không có đáp án đúng. Mức này giúp AI biết nên củng cố hay phản biện mạnh hơn.
+                    </p>
+                  </div>
 
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <label className="text-sm font-medium text-slate-300">
-                    5. Mức độ tự tin vào quyết định lựa chọn
-                    này của bạn (1 - 10):
-                  </label>
-
-                  <span className="text-indigo-400 font-bold text-lg">
-                    {formData.confidence} / 10
-                  </span>
+                  <div className="confidence-badge">
+                    {formData.confidence}
+                    <span>/10</span>
+                  </div>
                 </div>
 
                 <input
+                  aria-label="Mức độ tự tin"
                   type="range"
                   min="1"
                   max="10"
                   value={formData.confidence}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      confidence: parseInt(
-                        e.target.value,
-                        10
-                      ),
-                    })
+                  onChange={(event) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      confidence: Number.parseInt(event.target.value, 10),
+                    }))
                   }
-                  className="w-full accent-indigo-500 bg-slate-900 h-2 rounded-lg cursor-pointer"
+                  className="confidence-range"
                 />
-              </div>
 
-              {/* SUBMIT */}
+                <div className="mt-2.5 flex justify-between text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                  <span>Rất phân vân</span>
+                  <span>Rất chắc chắn</span>
+                </div>
+              </fieldset>
 
-              <button
-                type="submit"
-                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3.5 px-6 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 transition duration-200 mt-8"
-              >
-                <span>
-                  Bắt đầu Phân tích & Định hướng với AI
+              <button type="submit" className="primary-cta group">
+                <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/10">
+                  <Sparkles className="h-4.5 w-4.5" />
                 </span>
-
-                <ArrowRight className="w-5 h-5" />
+                <span className="min-w-0 flex-1 text-left">
+                  <span className="block font-bold">Bắt đầu phân tích với AI</span>
+                  <span className="mt-0.5 block text-xs font-medium text-indigo-100/70">
+                    Chuyển sang bước 2 · Bóc tách ngành nghề
+                  </span>
+                </span>
+                <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
               </button>
             </form>
-          </div>
+          </section>
         )}
 
-        {/* =====================================================
-            TAB 2 - CHAT
-        ===================================================== */}
-
         {activeTab === "chat" && (
-          <div className="bg-slate-950 border border-slate-800 rounded-2xl flex-1 flex flex-col h-[75vh] shadow-xl overflow-hidden">
+          <section className="glass-panel flex h-[calc(100dvh-172px)] min-h-[470px] flex-col overflow-hidden rounded-[24px] sm:h-[calc(100dvh-190px)] sm:min-h-[560px] md:h-[76vh] md:min-h-[620px] md:rounded-[28px]">
             {!isFormSubmitted ? (
-              <div className="m-auto text-center space-y-4 max-w-md p-6">
-                <HelpCircle className="w-12 h-12 text-indigo-400 mx-auto" />
-
-                <h3 className="text-lg font-bold text-white">
-                  Chưa có thông tin khảo sát
-                </h3>
-
-                <p className="text-sm text-slate-400">
-                  Vui lòng hoàn thiện Form ở mục{" "}
-                  <strong>
-                    &quot;1. Hỏi đáp & Khảo sát&quot;
-                  </strong>{" "}
-                  trước khi trò chuyện cùng AI.
+              <div className="m-auto max-w-md px-6 py-10 text-center">
+                <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl border border-indigo-400/15 bg-indigo-500/10 text-indigo-300">
+                  <CircleHelp className="h-7 w-7" />
+                </div>
+                <h3 className="mt-5 text-xl font-bold text-white">Chưa có dữ liệu khảo sát</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-400">
+                  Hoàn thành bước 1 trước để AI có đủ bối cảnh và không trả lời theo kiểu chung chung.
                 </p>
-
-                <button
-                  onClick={() =>
-                    setActiveTab("survey")
-                  }
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-5 py-2.5 rounded-xl transition"
-                >
-                  Đến Mục Khảo Sát
+                <button type="button" onClick={() => setActiveTab("survey")} className="secondary-cta mt-6">
+                  Về bước khảo sát
+                  <ArrowRight className="h-4 w-4" />
                 </button>
               </div>
             ) : (
               <>
-                {/* CHAT HEADER */}
-
-                <div className="bg-slate-900/90 border-b border-slate-800 px-4 py-3 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2 text-slate-300">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-
-                    <span>
-                      AI đang sẵn sàng bóc tách ngành:{" "}
-                      <strong>
-                        {formData.targetJob}
-                      </strong>
-                    </span>
+                <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] bg-white/[0.02] px-4 py-3.5 sm:px-5">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-500/15">
+                      <Bot className="h-5 w-5" />
+                      <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0b1120] bg-emerald-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-white">AI Hướng nghiệp</p>
+                      <p className="truncate text-xs text-slate-500">
+                        Đang phân tích: <span className="text-slate-300">{formData.targetJob}</span>
+                      </p>
+                    </div>
                   </div>
 
-                  <span className="text-slate-500 hidden md:inline">
-                    Giai đoạn 3 & 4: Bóc tách thực tế &
-                    Phản biện
-                  </span>
+                  <button type="button" onClick={handleReset} className="ghost-button shrink-0" title="Đổi ngành nghề">
+                    <RotateCcw className="h-4 w-4" />
+                    <span className="hidden sm:inline">Đổi ngành</span>
+                  </button>
                 </div>
 
-                {/* MESSAGES */}
-
-                <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
+                <div className="chat-scroll flex-1 overflow-y-auto px-3 py-4 sm:px-5 sm:py-5">
                   {messages.length === 0 && (
-                    <div className="text-center py-12 space-y-3">
-                      <Bot className="w-12 h-12 text-indigo-400 mx-auto animate-bounce" />
-
-                      <p className="text-slate-300 font-medium">
-                        Chào bạn! AI đã đọc thông tin khảo
-                        sát của bạn về ngành{" "}
-                        <strong>
-                          {formData.targetJob}
-                        </strong>
-                        .
+                    <div className="mx-auto flex min-h-full max-w-lg flex-col items-center justify-center py-8 text-center">
+                      <div className="relative">
+                        <div className="absolute inset-0 rounded-3xl bg-indigo-500/20 blur-2xl" />
+                        <div className="relative grid h-20 w-20 place-items-center rounded-3xl border border-indigo-400/20 bg-indigo-500/10 text-indigo-300">
+                          <Sparkles className="h-8 w-8" />
+                        </div>
+                      </div>
+                      <span className="mt-5 rounded-full border border-white/[0.06] bg-white/[0.03] px-3 py-1 text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
+                        Sẵn sàng phân tích
+                      </span>
+                      <h3 className="mt-3 text-xl font-bold text-white sm:text-2xl">
+                        Bắt đầu với {formData.targetJob}
+                      </h3>
+                      <p className="mt-2 max-w-md text-sm leading-6 text-slate-400">
+                        AI sẽ nhìn cả cơ hội lẫn những phần ít được kể: cạnh tranh, áp lực, rào cản và khả năng phù hợp với chính bạn.
                       </p>
-
-                      <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                        Hãy gửi một câu chào hoặc bấm nút bên
-                        dưới để bắt đầu nhận phân tích bóc
-                        tách 2 mặt của ngành!
-                      </p>
-
                       <button
                         type="button"
                         onClick={handleStartAnalysis}
                         disabled={isLoading}
-                        className="text-xs bg-indigo-950 border border-indigo-800 text-indigo-300 hover:text-white disabled:opacity-50 px-4 py-2 rounded-full transition"
+                        className="primary-button mt-6"
                       >
-                        🚀 Bắt đầu Phân tích Ngành
+                        <Sparkles className="h-4 w-4" />
+                        Phân tích ngành ngay
+                        <ArrowRight className="h-4 w-4" />
                       </button>
                     </div>
                   )}
 
-                  {messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`flex gap-3 ${
-                        message.role === "user"
-                          ? "justify-end"
-                          : "justify-start"
-                      }`}
-                    >
-                      {/* BOT ICON */}
+                  <div className="space-y-5">
+                    {messages.map((message) => {
+                      const isUser = message.role === "user";
 
-                      {message.role !== "user" && (
-                        <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white shrink-0 mt-1">
-                          <Bot className="w-5 h-5" />
+                      return (
+                        <div key={message.id} className={`flex items-end gap-2.5 ${isUser ? "justify-end" : "justify-start"}`}>
+                          {!isUser && (
+                            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-indigo-500 text-white shadow-lg shadow-indigo-500/10">
+                              <Bot className="h-4 w-4" />
+                            </div>
+                          )}
+
+                          <div className={`max-w-[88%] sm:max-w-[78%] ${isUser ? "order-first" : ""}`}>
+                            <div
+                              className={`message-bubble ${
+                                isUser
+                                  ? "message-user"
+                                  : "message-assistant"
+                              }`}
+                            >
+                              {message.parts.map((part, index) => {
+                                if (part.type !== "text") return null;
+
+                                if (isUser) {
+                                  return (
+                                    <p key={`${message.id}-${index}`} className="whitespace-pre-wrap">
+                                      {part.text}
+                                    </p>
+                                  );
+                                }
+
+                                return (
+                                  <div key={`${message.id}-${index}`} className="ai-markdown">
+                                    <ReactMarkdown>{part.text}</ReactMarkdown>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {isUser && (
+                            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/[0.06] text-slate-300">
+                              <User className="h-4 w-4" />
+                            </div>
+                          )}
                         </div>
-                      )}
+                      );
+                    })}
 
-                      {/* MESSAGE BODY */}
-
-                      <div
-                        className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
-                          message.role === "user"
-                            ? "bg-indigo-600 text-white rounded-tr-none"
-                            : "bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none"
-                        }`}
-                      >
-                        {message.parts.map(
-                          (part, index) => {
-                            if (
-                              part.type === "text"
-                            ) {
-                              return (
-                                <span
-                                  key={`${message.id}-${index}`}
-                                >
-                                  {part.text}
-                                </span>
-                              );
-                            }
-
-                            return null;
-                          }
-                        )}
-                      </div>
-
-                      {/* USER ICON */}
-
-                      {message.role === "user" && (
-                        <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-300 shrink-0 mt-1">
-                          <User className="w-5 h-5" />
+                    {friendlyError && (
+                      <div className="flex items-start gap-2.5">
+                        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-rose-400/20 bg-rose-400/10 text-rose-300">
+                          <AlertTriangle className="h-4 w-4" />
                         </div>
-                      )}
-                    </div>
-                  ))}
-
-                  {/* LOADING */}
-
-                  {isLoading && (
-                    <div className="flex gap-3 justify-start items-center text-slate-400 text-xs py-2">
-                      <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white">
-                        <Bot className="w-5 h-5" />
+                        <div className="max-w-[88%] rounded-2xl border border-rose-400/15 bg-rose-400/[0.06] px-4 py-3 sm:max-w-[78%]">
+                          <p className="text-sm font-semibold text-rose-200">
+                            Chưa nhận được câu trả lời
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-slate-400">
+                            {friendlyError}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleRetry}
+                            className="mt-3 inline-flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/[0.08]"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            Thử lại
+                          </button>
+                        </div>
                       </div>
+                    )}
 
-                      <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-4 py-2 rounded-2xl">
-                        <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
-
-                        <span>
-                          AI đang bóc tách số liệu...
-                        </span>
+                    {isLoading && (
+                      <div className="flex items-end gap-2.5">
+                        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-indigo-500 text-white">
+                          <Bot className="h-4 w-4" />
+                        </div>
+                        <div className="message-bubble message-assistant flex items-center gap-2.5 text-sm text-slate-400">
+                          <Loader2 className="h-4 w-4 animate-spin text-indigo-300" />
+                          <span>Đang bóc tách dữ liệu và phản biện...</span>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  <div ref={messagesEndRef} />
+                    <div ref={messagesEndRef} />
+                  </div>
                 </div>
 
-                {/* INPUT */}
-
-                <form
-                  onSubmit={handleSubmit}
-                  className="p-3 md:p-4 bg-slate-900/80 border-t border-slate-800 flex items-center gap-2"
-                >
-                  <input
-                    value={input}
-                    onChange={(e) =>
-                      setInput(e.target.value)
-                    }
-                    placeholder={`Hỏi thêm hoặc chia sẻ suy nghĩ về ngành ${formData.targetJob}...`}
-                    className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition"
-                  />
-
-                  <button
-                    type="submit"
-                    disabled={
-                      isLoading || !input.trim()
-                    }
-                    className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white p-3 rounded-xl transition"
-                  >
-                    <Send className="w-5 h-5" />
-                  </button>
+                <form onSubmit={handleSubmit} className="border-t border-white/[0.06] bg-[#080d1b]/90 p-3 backdrop-blur-xl sm:p-4">
+                  <div className="chat-composer">
+                    <textarea
+                      ref={chatInputRef}
+                      rows={1}
+                      value={input}
+                      onChange={(event) => setInput(event.target.value)}
+                      onKeyDown={handleChatKeyDown}
+                      maxLength={MAX_MESSAGE_CHARS}
+                      placeholder={`Hỏi thêm về ${formData.targetJob}...`}
+                      className="min-h-[48px] max-h-32 flex-1 resize-none bg-transparent px-3 py-3 text-sm leading-6 text-slate-100 outline-none placeholder:text-slate-600"
+                    />
+                    {isLoading ? (
+                      <button
+                        type="button"
+                        onClick={stop}
+                        className="send-button"
+                        aria-label="Dừng tạo câu trả lời"
+                        title="Dừng tạo câu trả lời"
+                      >
+                        <Square className="h-4.5 w-4.5 fill-current" />
+                      </button>
+                    ) : (
+                      <button
+                        type="submit"
+                        disabled={!input.trim()}
+                        className="send-button"
+                        aria-label="Gửi tin nhắn"
+                      >
+                        <Send className="h-5 w-5" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-3 px-1">
+                    <p className="hidden text-[10px] text-slate-600 sm:block">
+                      Enter để gửi · Shift + Enter để xuống dòng · AI có thể sai, hãy dùng bước Kiểm chứng khi cần.
+                    </p>
+                    <p
+                      className={`ml-auto text-[10px] ${
+                        input.length >= 2800 ? "text-amber-300" : "text-slate-600"
+                      }`}
+                    >
+                      {input.length}/{MAX_MESSAGE_CHARS}
+                    </p>
+                  </div>
                 </form>
               </>
             )}
-          </div>
+          </section>
         )}
 
-        {/* =====================================================
-            TAB 3 - INFORMATION
-        ===================================================== */}
-
         {activeTab === "info" && (
-          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-xl">
-            <div className="mb-6">
-              <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-                <Newspaper className="text-indigo-400" />
-
-                Kiểm Chứng Thông Tin Thực Tế
-              </h2>
-
-              <p className="text-slate-400 text-sm">
-                Đừng chỉ tin vào truyền thông, cũng đừng chỉ
-                tin vào AI. Hãy tự mình kiểm chứng góc khuất
-                của ngành nghề qua các từ khóa chiến lược.
-              </p>
+          <section className="space-y-5">
+            <div className="glass-panel rounded-[28px] p-5 sm:p-7 lg:p-8">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="max-w-2xl">
+                  <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-amber-300/15 bg-amber-300/[0.07] px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-amber-200">
+                    <Search className="h-3.5 w-3.5" />
+                    Reality check
+                  </div>
+                  <h2 className="text-balance text-2xl font-bold tracking-tight text-white sm:text-[28px]">
+                    Đừng chỉ tin AI. Hãy tự kiểm chứng.
+                  </h2>
+                  <p className="mt-2 max-w-xl text-sm leading-6 text-slate-400 sm:text-[15px]">
+                    Các từ khóa dưới đây được tạo từ chính ngành bạn chọn để tìm những góc nhìn trái chiều, dữ liệu thị trường và trải nghiệm thật.
+                  </p>
+                </div>
+              </div>
             </div>
 
             {!isFormSubmitted ? (
-              <div className="p-8 border border-dashed border-slate-800 rounded-xl text-center text-slate-500 bg-slate-900/30">
-                <HelpCircle className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-
-                <p>
-                  Vui lòng hoàn thành khảo sát ở Tab 1 để hệ
-                  thống tạo từ khóa tìm kiếm riêng cho bạn.
+              <div className="glass-panel rounded-[24px] p-8 text-center sm:p-10">
+                <CircleHelp className="mx-auto h-10 w-10 text-slate-600" />
+                <h3 className="mt-4 font-bold text-slate-200">Chưa có ngành để kiểm chứng</h3>
+                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
+                  Hoàn thành khảo sát ở bước 1 để hệ thống tạo bộ từ khóa phù hợp.
                 </p>
+                <button type="button" onClick={() => setActiveTab("survey")} className="secondary-cta mt-5">
+                  Đi tới khảo sát
+                  <ArrowRight className="h-4 w-4" />
+                </button>
               </div>
             ) : (
-              <div className="space-y-6">
-                {/* SEARCH QUERIES */}
+              <div className="grid gap-5 lg:grid-cols-[1.18fr_0.82fr]">
+                <div className="glass-panel rounded-[24px] p-4 sm:p-5">
+                  <div className="mb-4 flex items-start gap-3">
+                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-rose-400/10 text-rose-300">
+                      <AlertTriangle className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-white">Từ khóa “giải ảo”</h3>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">
+                        Mở Google để tìm góc khuất, phản biện và dữ liệu trái chiều.
+                      </p>
+                    </div>
+                  </div>
 
-                <div className="bg-rose-950/20 border border-rose-900/50 rounded-xl p-5">
-                  <h3 className="text-rose-400 font-semibold mb-3 flex items-center gap-2">
-                    <AlertTriangle className="w-5 h-5" />
-
-                    Từ khóa tìm kiếm &quot;Giải ảo&quot;
-                    (Debunking Queries)
-                  </h3>
-
-                  <p className="text-sm text-slate-300 mb-4">
-                    Copy các từ khóa này lên Google, YouTube
-                    hoặc các hội nhóm Facebook để đọc những
-                    tâm sự thật nhất từ người trong cuộc:
-                  </p>
-
-                  <div className="grid gap-3">
+                  <div className="space-y-2.5">
                     {[
                       `${formData.targetJob} bão sa thải layoff`,
                       `Mặt trái của nghề ${formData.targetJob}`,
                       `Tại sao tôi bỏ nghề ${formData.targetJob}`,
-                      `Áp lực kiệt sức (burnout) ngành ${formData.targetJob}`,
+                      `Áp lực kiệt sức burnout ngành ${formData.targetJob}`,
                       `Thực trạng lương fresher ${formData.targetJob} hiện nay`,
-                    ].map((query, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between bg-slate-900 border border-slate-700 px-4 py-3 rounded-lg hover:border-indigo-500 transition group"
+                    ].map((query) => (
+                      <a
+                        key={query}
+                        href={`https://www.google.com/search?q=${encodeURIComponent(query)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="query-card group"
                       >
-                        <code className="text-sm text-indigo-300 font-mono">
+                        <span className="min-w-0 break-words font-mono text-xs leading-5 text-indigo-200 sm:text-sm">
                           {query}
-                        </code>
-
-                        <a
-                          href={`https://www.google.com/search?q=${encodeURIComponent(
-                            query
-                          )}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-slate-500 hover:text-indigo-400 flex items-center gap-1 text-xs font-medium transition opacity-0 group-hover:opacity-100"
-                        >
-                          Tìm Google
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      </div>
+                        </span>
+                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/[0.06] bg-white/[0.03] text-slate-500 transition group-hover:border-indigo-400/20 group-hover:text-indigo-300">
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </span>
+                      </a>
                     ))}
                   </div>
                 </div>
 
-                {/* SOURCES */}
+                <div className="glass-panel rounded-[24px] p-5">
+                  <div className="mb-5 flex items-center gap-3">
+                    <div className="grid h-10 w-10 place-items-center rounded-xl bg-indigo-400/10 text-indigo-300">
+                      <Compass className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-white">Nguồn nên kiểm tra</h3>
+                      <p className="mt-1 text-xs text-slate-500">Ưu tiên trải nghiệm thật + dữ liệu thị trường.</p>
+                    </div>
+                  </div>
 
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-                  <h3 className="text-indigo-400 font-semibold mb-3 flex items-center gap-2">
-                    <Compass className="w-5 h-5" />
-
-                    Gợi ý nguồn tìm hiểu thực tế
-                  </h3>
-
-                  <ul className="space-y-3 text-sm text-slate-300">
-                    <li className="flex items-start gap-2">
-                      <span className="text-indigo-500 mt-0.5">
-                        •
-                      </span>
-
-                      <span>
-                        <strong>
-                          Reddit / Quora / Voz:
-                        </strong>{" "}
-                        Tìm các thread có chữ &quot;kinh
-                        nghiệm xương máu&quot;, &quot;tâm sự
-                        nghề&quot;. Đây là nơi người ta ẩn
-                        danh nên sẽ nói thật nhất.
-                      </span>
-                    </li>
-
-                    <li className="flex items-start gap-2">
-                      <span className="text-indigo-500 mt-0.5">
-                        •
-                      </span>
-
-                      <span>
-                        <strong>
-                          Báo cáo thị trường (Market Report):
-                        </strong>{" "}
-                        Tìm kiếm báo cáo của TopCV, ITviec,
-                        VietnamWorks về tỷ lệ chọi và mức
-                        lương trung bình thực tế, thay vì tin
-                        vào báo mạng giật tít.
-                      </span>
-                    </li>
-
-                    <li className="flex items-start gap-2">
-                      <span className="text-indigo-500 mt-0.5">
-                        •
-                      </span>
-
-                      <span>
-                        <strong>
-                          Phỏng vấn người đi trước:
-                        </strong>{" "}
-                        Chủ động nhắn tin cho 1-2 người đang
-                        làm ở level Junior/Mid trên LinkedIn
-                        để hỏi về những khó khăn lớn nhất của
-                        họ trong 1 năm qua.
-                      </span>
-                    </li>
-                  </ul>
+                  <div className="space-y-3">
+                    {[
+                      {
+                        title: "Cộng đồng ẩn danh",
+                        text: "Reddit, Voz, Quora — tìm các thread “bỏ nghề”, “kinh nghiệm xương máu”, “burnout”.",
+                      },
+                      {
+                        title: "Báo cáo tuyển dụng",
+                        text: "TopCV, ITviec, VietnamWorks — đối chiếu nhu cầu tuyển dụng, mức lương và độ cạnh tranh.",
+                      },
+                      {
+                        title: "Người đang làm thật",
+                        text: "Nhắn 1–2 Junior/Mid trên LinkedIn và hỏi điều họ ước mình biết trước khi vào nghề.",
+                      },
+                    ].map((item, index) => (
+                      <div key={item.title} className="rounded-2xl border border-white/[0.06] bg-white/[0.025] p-4">
+                        <div className="flex gap-3">
+                          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white/[0.04] text-xs font-bold text-indigo-300">
+                            {index + 1}
+                          </span>
+                          <div>
+                            <h4 className="text-sm font-semibold text-slate-200">{item.title}</h4>
+                            <p className="mt-1 text-xs leading-5 text-slate-500">{item.text}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
-          </div>
+          </section>
         )}
       </main>
+
+      <nav className="mobile-nav md:hidden" aria-label="Điều hướng chính">
+        {tabItems.map((tab) => {
+          const Icon = tab.icon;
+          const active = activeTab === tab.id;
+
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => goToTab(tab.id)}
+              className={`mobile-nav-item ${active ? "mobile-nav-item-active" : ""}`}
+              aria-current={active ? "page" : undefined}
+            >
+              <span className="relative">
+                <Icon className="h-5 w-5" />
+                {tab.id === "chat" && isFormSubmitted && (
+                  <span className="absolute -right-1.5 -top-1 h-2 w-2 rounded-full border border-[#0a1020] bg-emerald-400" />
+                )}
+              </span>
+              <span>{tab.shortLabel}</span>
+            </button>
+          );
+        })}
+      </nav>
     </div>
   );
 }
