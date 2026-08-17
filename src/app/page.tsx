@@ -33,14 +33,40 @@ import {
 
 type ActiveTab = "survey" | "chat" | "info";
 
-const motivationOptions = [
-  "Đam mê cá nhân",
-  "Thu nhập hấp dẫn",
-  "Danh tiếng & Địa vị",
-  "Xu hướng xã hội (Hot trend)",
-  "Áp lực từ gia đình",
-  "Hình mẫu thành công (Idol/KOL)",
-  "Chưa có định hướng rõ ràng",
+const decisionOptions = [
+  "Tôi đã quyết định và gần như chắc chắn",
+  "Tôi khá nghiêng về lựa chọn này nhưng vẫn có thể thay đổi",
+  "Tôi đang cân nhắc giữa một vài ngành/nghề",
+  "Tôi chỉ đang tìm hiểu thử",
+];
+
+const understoodAspectOptions = [
+  "Công việc thực tế hằng ngày",
+  "Các chuyên ngành/vị trí khác nhau",
+  "Con đường học tập",
+  "Bằng cấp/chứng chỉ cần thiết",
+  "Kỹ năng cần có",
+  "Mức thu nhập",
+  "Cơ hội việc làm",
+  "Môi trường làm việc",
+  "Khả năng thăng tiến",
+  "Khó khăn và áp lực",
+  "Tỷ lệ cạnh tranh",
+  "Khả năng bị công nghệ/AI thay thế",
+  "Cơ hội làm việc trong và ngoài nước",
+  "Tôi chưa hiểu rõ những điều trên",
+];
+
+const sourceOptions = [
+  "Mạng xã hội (TikTok, Facebook, YouTube...)",
+  "Gia đình / Người thân",
+  "Bạn bè / Người quen",
+  "Thầy cô / Nhà trường",
+  "Người đang làm trong ngành",
+  "KOL / Influencer / Người nổi tiếng",
+  "Báo chí / Website / Báo cáo nghề nghiệp",
+  "Tự tìm hiểu qua Google / Internet",
+  "Khác",
 ];
 
 const tabItems: {
@@ -102,11 +128,20 @@ function getFriendlyChatError(error: Error) {
 export default function Home() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("survey");
   const [formData, setFormData] = useState({
+    name: "",
+    age: "",
+    grade: "",
     targetJob: "",
-    source: "Mạng xã hội",
+    targetPosition: "",
+    decisionStage: "",
     searchTime: "Dưới 1 tháng",
-    confidence: 5,
-    motivations: [] as string[],
+    knowledgeScore: 5,
+    understoodAspects: [] as string[],
+    interestReason: "",
+    source: sourceOptions[0],
+    fitReason: "",
+    concerns: "",
+    wantToKnowMost: "",
   });
   const [isFormSubmitted, setIsFormSubmitted] = useState(false);
   const [input, setInput] = useState("");
@@ -123,6 +158,9 @@ export default function Home() {
 
   const isLoading = status === "submitted" || status === "streaming";
   const friendlyError = error ? getFriendlyChatError(error) : null;
+  const careerDisplay = formData.targetPosition.trim()
+    ? `${formData.targetPosition} · ${formData.targetJob}`
+    : formData.targetJob;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
@@ -137,15 +175,29 @@ export default function Home() {
     }
   }, [activeTab, isFormSubmitted]);
 
-  const handleMotivationToggle = (option: string) => {
+  const handleAspectToggle = (option: string) => {
     setFormData((prev) => {
-      const exists = prev.motivations.includes(option);
+      const noneOption = "Tôi chưa hiểu rõ những điều trên";
+
+      if (option === noneOption) {
+        return {
+          ...prev,
+          understoodAspects: prev.understoodAspects.includes(noneOption)
+            ? []
+            : [noneOption],
+        };
+      }
+
+      const withoutNone = prev.understoodAspects.filter(
+        (item) => item !== noneOption
+      );
+      const exists = withoutNone.includes(option);
 
       return {
         ...prev,
-        motivations: exists
-          ? prev.motivations.filter((motivation) => motivation !== option)
-          : [...prev.motivations, option],
+        understoodAspects: exists
+          ? withoutNone.filter((item) => item !== option)
+          : [...withoutNone, option],
       };
     });
   };
@@ -153,14 +205,37 @@ export default function Home() {
   const handleSubmitForm = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    if (!formData.name.trim()) {
+      alert("Vui lòng nhập tên của bạn!");
+      return;
+    }
+
+    if (!formData.age.trim() || !formData.grade.trim()) {
+      alert("Vui lòng cho biết tuổi và lớp hiện tại!");
+      return;
+    }
+
     if (!formData.targetJob.trim()) {
-      alert("Vui lòng nhập ngành nghề bạn muốn tìm hiểu!");
+      alert("Vui lòng nhập ngành/nghề bạn muốn tìm hiểu!");
+      return;
+    }
+
+    if (!formData.decisionStage) {
+      alert("Vui lòng chọn mức độ chắc chắn với lựa chọn hiện tại!");
       return;
     }
 
     setFormData((prev) => ({
       ...prev,
+      name: prev.name.trim(),
+      age: prev.age.trim(),
+      grade: prev.grade.trim(),
       targetJob: prev.targetJob.trim(),
+      targetPosition: prev.targetPosition.trim(),
+      interestReason: prev.interestReason.trim(),
+      fitReason: prev.fitReason.trim(),
+      concerns: prev.concerns.trim(),
+      wantToKnowMost: prev.wantToKnowMost.trim(),
     }));
     setIsFormSubmitted(true);
     setActiveTab("chat");
@@ -223,7 +298,7 @@ export default function Home() {
 
     void sendMessage(
       {
-        text: `Chào AI, tôi muốn tìm hiểu về nghề ${formData.targetJob}. Hãy phân tích góc khuất và thực tế ngành này cho tôi.`,
+        text: `Tôi đã hoàn thành khảo sát. Hãy bắt đầu phân tích lựa chọn nghề nghiệp ${careerDisplay} dựa trên hồ sơ của tôi, chỉ ra cả cơ hội, góc khuất và những điểm tôi có thể đang nhìn chưa đủ.`,
       },
       {
         body: { formData },
@@ -349,79 +424,237 @@ export default function Home() {
                 <div className="max-w-2xl">
                   <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-indigo-400/15 bg-indigo-400/[0.08] px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-indigo-300">
                     <GraduationCap className="h-3.5 w-3.5" />
-                    Khảo sát đầu vào
+                    Khảo sát định hướng
                   </div>
                   <h2 className="text-balance text-2xl font-bold tracking-tight text-white sm:text-[28px]">
-                    Trước khi hỏi AI, hãy cho nó hiểu bạn trước.
+                    Cho AI hiểu bạn và cách bạn đang nhìn về nghề.
                   </h2>
-                  <p className="mt-2 max-w-xl text-sm leading-6 text-slate-400 sm:text-[15px]">
-                    5 câu hỏi ngắn giúp AI phân tích đúng bối cảnh, động cơ và mức độ chắc chắn của bạn — thay vì đưa ra lời khuyên chung chung.
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400 sm:text-[15px]">
+                    Bộ câu hỏi này giúp AI biết bạn đang ở giai đoạn nào, đã hiểu nghề tới đâu và những điểm nào cần được đào sâu hoặc phản biện.
                   </p>
                 </div>
 
                 <div className="flex shrink-0 items-center gap-2 self-start rounded-2xl border border-white/[0.06] bg-white/[0.025] px-3 py-2.5 text-xs text-slate-400">
                   <ShieldCheck className="h-4 w-4 text-emerald-300" />
-                  <span>Khoảng 2 phút</span>
+                  <span>Khoảng 4 phút</span>
                 </div>
               </div>
             </div>
 
-            <form onSubmit={handleSubmitForm} className="space-y-7 px-5 py-6 sm:px-7 sm:py-7 lg:px-8 lg:py-8">
-              <fieldset className="space-y-3">
-                <label htmlFor="target-job" className="field-label">
-                  <span className="field-number">1</span>
-                  Ngành nghề bạn đang quan tâm hoặc muốn theo đuổi là gì?
-                  <span className="text-rose-300">*</span>
-                </label>
-                <input
-                  id="target-job"
-                  type="text"
-                  required
-                  autoComplete="off"
-                  placeholder="Ví dụ: Lập trình viên AI, Digital Marketing, Bác sĩ..."
-                  value={formData.targetJob}
-                  onChange={(event) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      targetJob: event.target.value,
-                    }))
-                  }
-                  className="form-control"
-                />
-              </fieldset>
+            <form onSubmit={handleSubmitForm} className="space-y-8 px-5 py-6 sm:px-7 sm:py-7 lg:px-8 lg:py-8">
+              {/* 01 - ABOUT YOU */}
+              <div className="space-y-5">
+                <div className="flex items-start gap-3 border-b border-white/[0.06] pb-4">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-indigo-500/10 text-xs font-bold text-indigo-300">
+                    01
+                  </span>
+                  <div>
+                    <h3 className="font-bold text-white">Về bạn</h3>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      Một chút bối cảnh để AI điều chỉnh cách tư vấn phù hợp với độ tuổi và giai đoạn học tập.
+                    </p>
+                  </div>
+                </div>
 
-              <div className="grid gap-7 lg:grid-cols-2 lg:gap-5">
                 <fieldset className="space-y-3">
-                  <label htmlFor="source" className="field-label">
-                    <span className="field-number">2</span>
-                    Bạn biết đến ngành này chủ yếu từ đâu?
+                  <label htmlFor="name" className="field-label">
+                    <span className="field-number">1</span>
+                    Bạn tên là gì?
+                    <span className="text-rose-300">*</span>
                   </label>
-                  <div className="select-wrap">
-                    <select
-                      id="source"
-                      value={formData.source}
+                  <input
+                    id="name"
+                    type="text"
+                    required
+                    autoComplete="name"
+                    placeholder="Ví dụ: Nguyễn Minh Anh"
+                    value={formData.name}
+                    onChange={(event) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        name: event.target.value,
+                      }))
+                    }
+                    className="form-control"
+                  />
+                </fieldset>
+
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <fieldset className="space-y-3">
+                    <label htmlFor="age" className="field-label">
+                      <span className="field-number">2</span>
+                      Bạn bao nhiêu tuổi?
+                      <span className="text-rose-300">*</span>
+                    </label>
+                    <input
+                      id="age"
+                      type="number"
+                      required
+                      min="10"
+                      max="100"
+                      inputMode="numeric"
+                      placeholder="Ví dụ: 17"
+                      value={formData.age}
                       onChange={(event) =>
                         setFormData((prev) => ({
                           ...prev,
-                          source: event.target.value,
+                          age: event.target.value,
                         }))
                       }
-                      className="form-control appearance-none pr-11"
-                    >
-                      <option value="Mạng xã hội">Mạng xã hội (TikTok, Facebook, YouTube...)</option>
-                      <option value="Gia đình / Người thân">Gia đình / Người thân tư vấn</option>
-                      <option value="Bạn bè / Đồng nghiệp">Bạn bè / Đồng nghiệp</option>
-                      <option value="Thần tượng / KOL">Thần tượng / KOLs / Người nổi tiếng</option>
-                      <option value="Thầy cô / Trường học">Thầy cô / Định hướng trường học</option>
-                      <option value="Tự tìm hiểu báo chí">Tự tìm hiểu qua bài báo / Nghiên cứu</option>
-                    </select>
+                      className="form-control"
+                    />
+                  </fieldset>
+
+                  <fieldset className="space-y-3">
+                    <label htmlFor="grade" className="field-label">
+                      <span className="field-number">3</span>
+                      Hiện tại bạn học lớp mấy?
+                      <span className="text-rose-300">*</span>
+                    </label>
+                    <input
+                      id="grade"
+                      type="text"
+                      required
+                      autoComplete="off"
+                      placeholder="Ví dụ: Lớp 12"
+                      value={formData.grade}
+                      onChange={(event) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          grade: event.target.value,
+                        }))
+                      }
+                      className="form-control"
+                    />
+                  </fieldset>
+                </div>
+              </div>
+
+              {/* 02 - CAREER DIRECTION */}
+              <div className="space-y-5">
+                <div className="flex items-start gap-3 border-b border-white/[0.06] pb-4">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-indigo-500/10 text-xs font-bold text-indigo-300">
+                    02
+                  </span>
+                  <div>
+                    <h3 className="font-bold text-white">Nghề bạn đang hướng tới</h3>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      Xác định lĩnh vực, vị trí cụ thể và mức độ chắc chắn hiện tại của bạn.
+                    </p>
                   </div>
+                </div>
+
+                <fieldset className="space-y-3">
+                  <label htmlFor="target-job" className="field-label">
+                    <span className="field-number">4</span>
+                    Hiện tại bạn đang quan tâm hoặc muốn theo đuổi nghề/ngành nào?
+                    <span className="text-rose-300">*</span>
+                  </label>
+                  <input
+                    id="target-job"
+                    type="text"
+                    required
+                    autoComplete="off"
+                    placeholder="Ví dụ: Công nghệ thông tin, Marketing, Y khoa..."
+                    value={formData.targetJob}
+                    onChange={(event) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        targetJob: event.target.value,
+                      }))
+                    }
+                    className="form-control"
+                  />
                 </fieldset>
 
                 <fieldset className="space-y-3">
+                  <label htmlFor="target-position" className="field-label">
+                    <span className="field-number">5</span>
+                    Bạn đang hướng tới vị trí/công việc cụ thể nào trong lĩnh vực đó?
+                  </label>
+                  <input
+                    id="target-position"
+                    type="text"
+                    autoComplete="off"
+                    placeholder="Ví dụ: AI Engineer, Bác sĩ ngoại khoa, Brand Marketing..."
+                    value={formData.targetPosition}
+                    onChange={(event) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        targetPosition: event.target.value,
+                      }))
+                    }
+                    className="form-control"
+                  />
+                  <p className="text-xs leading-5 text-slate-500">
+                    Nếu chưa biết vị trí cụ thể, bạn có thể để trống. AI sẽ giúp bạn bóc tách các hướng bên trong ngành.
+                  </p>
+                </fieldset>
+
+                <fieldset className="space-y-3">
+                  <legend className="field-label">
+                    <span className="field-number">6</span>
+                    Bạn đã quyết định khá chắc chắn về lựa chọn này chưa?
+                    <span className="text-rose-300">*</span>
+                  </legend>
+
+                  <div className="grid gap-2.5">
+                    {decisionOptions.map((option, index) => {
+                      const selected = formData.decisionStage === option;
+
+                      return (
+                        <button
+                          type="button"
+                          key={option}
+                          onClick={() =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              decisionStage: option,
+                            }))
+                          }
+                          className={`motivation-card ${selected ? "motivation-card-active" : ""}`}
+                          aria-pressed={selected}
+                        >
+                          <span className="flex min-w-0 items-start gap-3 pr-3">
+                            <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-white/[0.04] text-[11px] font-bold text-indigo-300">
+                              {index + 1}
+                            </span>
+                            <span className="text-left">{option}</span>
+                          </span>
+                          <span
+                            className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border transition ${
+                              selected
+                                ? "border-indigo-400 bg-indigo-500 text-white"
+                                : "border-slate-700 text-transparent"
+                            }`}
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              </div>
+
+              {/* 03 - KNOWLEDGE */}
+              <div className="space-y-5">
+                <div className="flex items-start gap-3 border-b border-white/[0.06] pb-4">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-indigo-500/10 text-xs font-bold text-indigo-300">
+                    03
+                  </span>
+                  <div>
+                    <h3 className="font-bold text-white">Bạn đã hiểu nghề tới đâu?</h3>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      AI sẽ dùng phần này để phát hiện khoảng trống kiến thức thay vì giải thích lại những điều bạn đã biết.
+                    </p>
+                  </div>
+                </div>
+
+                <fieldset className="space-y-3">
                   <label htmlFor="search-time" className="field-label">
-                    <span className="field-number">3</span>
-                    Bạn đã tìm hiểu ngành này trong bao lâu?
+                    <span className="field-number">7</span>
+                    Bạn đã tìm hiểu về ngành/nghề này trong bao lâu?
                   </label>
                   <div className="select-wrap">
                     <select
@@ -435,100 +668,223 @@ export default function Home() {
                       }
                       className="form-control appearance-none pr-11"
                     >
-                      <option value="Mới nghe nói tới">Mới nghe nói tới gần đây</option>
+                      <option value="Mới bắt đầu tìm hiểu">Mới bắt đầu tìm hiểu</option>
                       <option value="Dưới 1 tháng">Dưới 1 tháng</option>
-                      <option value="Từ 1 - 6 tháng">Từ 1 đến 6 tháng</option>
-                      <option value="Trên 6 tháng">Trên 6 tháng</option>
-                      <option value="Đang học / Đang làm">Đang trực tiếp học/làm việc trong ngành</option>
+                      <option value="Từ 1 - 3 tháng">Từ 1 đến 3 tháng</option>
+                      <option value="Từ 3 - 6 tháng">Từ 3 đến 6 tháng</option>
+                      <option value="Từ 6 - 12 tháng">Từ 6 đến 12 tháng</option>
+                      <option value="Trên 1 năm">Trên 1 năm</option>
+                      <option value="Đang trực tiếp học/làm trong lĩnh vực">Đang trực tiếp học/làm trong lĩnh vực</option>
                     </select>
+                  </div>
+                </fieldset>
+
+                <fieldset className="rounded-2xl border border-white/[0.06] bg-white/[0.025] p-4 sm:p-5">
+                  <div className="mb-5 flex items-start justify-between gap-4">
+                    <div>
+                      <legend className="field-label">
+                        <span className="field-number">8</span>
+                        Bạn tự đánh giá mức độ hiểu biết của mình về nghề này như thế nào?
+                      </legend>
+                      <p className="mt-1.5 pl-9 text-xs leading-5 text-slate-500">
+                        Chấm trên thang điểm 10. AI sẽ đối chiếu điểm này với những khía cạnh bạn đã tìm hiểu.
+                      </p>
+                    </div>
+
+                    <div className="confidence-badge">
+                      {formData.knowledgeScore}
+                      <span>/10</span>
+                    </div>
+                  </div>
+
+                  <input
+                    aria-label="Mức độ hiểu biết về nghề"
+                    type="range"
+                    min="1"
+                    max="10"
+                    value={formData.knowledgeScore}
+                    onChange={(event) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        knowledgeScore: Number.parseInt(event.target.value, 10),
+                      }))
+                    }
+                    className="confidence-range"
+                  />
+
+                  <div className="mt-2.5 flex justify-between text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                    <span>Biết rất ít</span>
+                    <span>Hiểu rất rõ</span>
+                  </div>
+                </fieldset>
+
+                <fieldset className="space-y-3">
+                  <div className="flex flex-wrap items-end justify-between gap-2">
+                    <legend className="field-label">
+                      <span className="field-number">9</span>
+                      Bạn cảm thấy mình hiểu rõ những khía cạnh nào của nghề này?
+                    </legend>
+                    <span className="text-xs text-slate-500">Có thể chọn nhiều</span>
+                  </div>
+
+                  <div className="grid gap-2.5 sm:grid-cols-2">
+                    {understoodAspectOptions.map((option) => {
+                      const selected = formData.understoodAspects.includes(option);
+
+                      return (
+                        <button
+                          type="button"
+                          key={option}
+                          onClick={() => handleAspectToggle(option)}
+                          className={`motivation-card ${selected ? "motivation-card-active" : ""}`}
+                          aria-pressed={selected}
+                        >
+                          <span className="pr-3 text-left">{option}</span>
+                          <span
+                            className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border transition ${
+                              selected
+                                ? "border-indigo-400 bg-indigo-500 text-white"
+                                : "border-slate-700 text-transparent"
+                            }`}
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </fieldset>
               </div>
 
-              <fieldset className="space-y-3">
-                <div className="flex flex-wrap items-end justify-between gap-2">
-                  <legend className="field-label">
-                    <span className="field-number">4</span>
-                    Động cơ chính khiến bạn chọn ngành này?
-                  </legend>
-                  <span className="text-xs text-slate-500">Có thể chọn nhiều</span>
-                </div>
-
-                <div className="grid gap-2.5 sm:grid-cols-2">
-                  {motivationOptions.map((option) => {
-                    const selected = formData.motivations.includes(option);
-
-                    return (
-                      <button
-                        type="button"
-                        key={option}
-                        onClick={() => handleMotivationToggle(option)}
-                        className={`motivation-card ${selected ? "motivation-card-active" : ""}`}
-                        aria-pressed={selected}
-                      >
-                        <span className="pr-3">{option}</span>
-                        <span
-                          className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border transition ${
-                            selected
-                              ? "border-indigo-400 bg-indigo-500 text-white"
-                              : "border-slate-700 text-transparent"
-                          }`}
-                        >
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </fieldset>
-
-              <fieldset className="rounded-2xl border border-white/[0.06] bg-white/[0.025] p-4 sm:p-5">
-                <div className="mb-5 flex items-start justify-between gap-4">
+              {/* 04 - MOTIVATION & CONCERNS */}
+              <div className="space-y-5">
+                <div className="flex items-start gap-3 border-b border-white/[0.06] pb-4">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-indigo-500/10 text-xs font-bold text-indigo-300">
+                    04
+                  </span>
                   <div>
-                    <legend className="field-label">
-                      <span className="field-number">5</span>
-                      Bạn tự tin tới đâu về lựa chọn này?
-                    </legend>
-                    <p className="mt-1.5 pl-9 text-xs leading-5 text-slate-500">
-                      Không có đáp án đúng. Mức này giúp AI biết nên củng cố hay phản biện mạnh hơn.
+                    <h3 className="font-bold text-white">Điều gì đang ảnh hưởng tới lựa chọn của bạn?</h3>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      Đây là phần giúp AI phân biệt giữa sở thích thật, kỳ vọng, ảnh hưởng bên ngoài và những nỗi lo còn chưa được giải đáp.
                     </p>
                   </div>
+                </div>
 
-                  <div className="confidence-badge">
-                    {formData.confidence}
-                    <span>/10</span>
+                <fieldset className="space-y-3">
+                  <label htmlFor="interest-reason" className="field-label">
+                    <span className="field-number">10</span>
+                    Điều gì khiến bạn quan tâm đến ngành/nghề này?
+                  </label>
+                  <textarea
+                    id="interest-reason"
+                    rows={3}
+                    placeholder="Ví dụ: Tôi thích công nghệ, thấy công việc sáng tạo, thu nhập tốt, có người truyền cảm hứng..."
+                    value={formData.interestReason}
+                    onChange={(event) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        interestReason: event.target.value,
+                      }))
+                    }
+                    className="form-control min-h-[110px] resize-y"
+                  />
+                </fieldset>
+
+                <fieldset className="space-y-3">
+                  <label htmlFor="source" className="field-label">
+                    <span className="field-number">11</span>
+                    Bạn biết đến nghề này chủ yếu thông qua đâu?
+                  </label>
+                  <div className="select-wrap">
+                    <select
+                      id="source"
+                      value={formData.source}
+                      onChange={(event) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          source: event.target.value,
+                        }))
+                      }
+                      className="form-control appearance-none pr-11"
+                    >
+                      {sourceOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                </div>
+                </fieldset>
 
-                <input
-                  aria-label="Mức độ tự tin"
-                  type="range"
-                  min="1"
-                  max="10"
-                  value={formData.confidence}
-                  onChange={(event) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      confidence: Number.parseInt(event.target.value, 10),
-                    }))
-                  }
-                  className="confidence-range"
-                />
+                <fieldset className="space-y-3">
+                  <label htmlFor="fit-reason" className="field-label">
+                    <span className="field-number">12</span>
+                    Điều gì khiến bạn tin rằng nghề này phù hợp với mình?
+                  </label>
+                  <textarea
+                    id="fit-reason"
+                    rows={3}
+                    placeholder="Ví dụ: Điểm mạnh, sở thích, môn học, tính cách hoặc trải nghiệm khiến bạn nghĩ mình phù hợp..."
+                    value={formData.fitReason}
+                    onChange={(event) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        fitReason: event.target.value,
+                      }))
+                    }
+                    className="form-control min-h-[110px] resize-y"
+                  />
+                </fieldset>
 
-                <div className="mt-2.5 flex justify-between text-[10px] font-semibold uppercase tracking-wider text-slate-600">
-                  <span>Rất phân vân</span>
-                  <span>Rất chắc chắn</span>
-                </div>
-              </fieldset>
+                <fieldset className="space-y-3">
+                  <label htmlFor="concerns" className="field-label">
+                    <span className="field-number">13</span>
+                    Điều gì khiến bạn lo lắng hoặc còn phân vân về nghề này?
+                  </label>
+                  <textarea
+                    id="concerns"
+                    rows={3}
+                    placeholder="Ví dụ: Sợ cạnh tranh, khó xin việc, áp lực cao, không chắc mình đủ giỏi..."
+                    value={formData.concerns}
+                    onChange={(event) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        concerns: event.target.value,
+                      }))
+                    }
+                    className="form-control min-h-[110px] resize-y"
+                  />
+                </fieldset>
+
+                <fieldset className="space-y-3">
+                  <label htmlFor="want-to-know" className="field-label">
+                    <span className="field-number">14</span>
+                    Nếu được biết thêm về nghề này, bạn muốn tìm hiểu điều gì nhất?
+                  </label>
+                  <textarea
+                    id="want-to-know"
+                    rows={3}
+                    placeholder="Ví dụ: Công việc thực tế, lương, lộ trình học, khả năng bị AI thay thế, cơ hội làm việc..."
+                    value={formData.wantToKnowMost}
+                    onChange={(event) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        wantToKnowMost: event.target.value,
+                      }))
+                    }
+                    className="form-control min-h-[110px] resize-y"
+                  />
+                </fieldset>
+              </div>
 
               <button type="submit" className="primary-cta group">
                 <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/10">
                   <Sparkles className="h-4.5 w-4.5" />
                 </span>
                 <span className="min-w-0 flex-1 text-left">
-                  <span className="block font-bold">Bắt đầu phân tích với AI</span>
+                  <span className="block font-bold">Hoàn tất khảo sát & bắt đầu phân tích</span>
                   <span className="mt-0.5 block text-xs font-medium text-indigo-100/70">
-                    Chuyển sang bước 2 · Bóc tách ngành nghề
+                    AI sẽ dùng toàn bộ hồ sơ trên để xác định điểm cần đào sâu
                   </span>
                 </span>
                 <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
@@ -564,7 +920,7 @@ export default function Home() {
                     <div className="min-w-0">
                       <p className="truncate text-sm font-bold text-white">AI Hướng nghiệp</p>
                       <p className="truncate text-xs text-slate-500">
-                        Đang phân tích: <span className="text-slate-300">{formData.targetJob}</span>
+                        Đang phân tích: <span className="text-slate-300">{careerDisplay}</span>
                       </p>
                     </div>
                   </div>
@@ -588,7 +944,7 @@ export default function Home() {
                         Sẵn sàng phân tích
                       </span>
                       <h3 className="mt-3 text-xl font-bold text-white sm:text-2xl">
-                        Bắt đầu với {formData.targetJob}
+                        Bắt đầu với {careerDisplay}
                       </h3>
                       <p className="mt-2 max-w-md text-sm leading-6 text-slate-400">
                         AI sẽ nhìn cả cơ hội lẫn những phần ít được kể: cạnh tranh, áp lực, rào cản và khả năng phù hợp với chính bạn.
@@ -704,7 +1060,7 @@ export default function Home() {
                       onChange={(event) => setInput(event.target.value)}
                       onKeyDown={handleChatKeyDown}
                       maxLength={MAX_MESSAGE_CHARS}
-                      placeholder={`Hỏi thêm về ${formData.targetJob}...`}
+                      placeholder={`Hỏi thêm về ${careerDisplay}...`}
                       className="min-h-[48px] max-h-32 flex-1 resize-none bg-transparent px-3 py-3 text-sm leading-6 text-slate-100 outline-none placeholder:text-slate-600"
                     />
                     {isLoading ? (
